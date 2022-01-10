@@ -1,0 +1,22 @@
+#Link to download image
+http://bit.ly/udemy_ubuntu_image
+
+#username and password
+  username: hduser
+  password:hadoop123
+  
+	  
+Download the following documents from Lecture 3 of Section 1
+
+1. Creditcard Fraud detection.pdf      
+       The complete project is explained & demonstrated in this document
+
+2. Demonstration.pdf
+       This document contains only a demonstration and instructions to run the project
+
+
+
+https://pixipanda.com/
+Refer to this website for complete training content on Kafka, Spark, Spark SQL,
+Spark Streaming, Structured Streaming, Hive, Sqoop, HDFS, and MapReduce
+Along with training content, I have also uploaded code and image for practice	  

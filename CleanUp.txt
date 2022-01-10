@@ -1,0 +1,34 @@
+***********************************************************************************	
+#Cleanup	
+***********************************************************************************
+
+#Stop Kafka Producer
+
+#Stop Dashboard Webserver
+
+#Stop Spark Streaming Job
+
+#Stop Kafka server. Always stop Kafka Server first and wait for few seconds for the kafka server to shutdown
+  kafka-server-stop
+
+#Stop zookeeper server
+ zookeeper-server-stop
+ 
+#Clearing Kafka and Zookeeper data. First stop both the servers
+ rm -rf /tmp/kafka-logs
+ rm -rf /tmp/zookeeper
+ 
+
+#Clear Cassandra table contents.
+ TRUNCATE  customer ;
+ TRUNCATE fraud_transaction ;
+ TRUNCATE non_fraud_transaction ;
+ TRUNCATE kafka_offset ;
+ 
+#Stop Cassandra by pressing CRTL-C in the respective terminal  
+
+
+#Remove Model
+rm -rf ~/workspace/FraudDetection/blob/master/src/main/resources/spark/training
+
+  		

@@ -1,0 +1,368 @@
+https://www.youtube.com/playlist?list=PLjOv0CBS0xcJsJKlE2FJ9Cs5r-gzkGDNc
+
+At the end of this playlist, you can find 2 projects. It's a live class training so bare with disturbance here and there.
+
+1. Log analysis
+
+https://github.com/pixipanda/ClickStreamAnalytics
+
+The code is slightly different from the video. But overall architecture is the same
+
+https://pixipanda.com/clickstream-analytics/
+
+2. E-comerce Sessionization.
+
+https://github.com/pixipanda/EcommerceMarketingPipeline
+
+Checkout the branch to deploy it on Cloudera on AWS
+==============
+Spark ML job
+==============
+
+Since number of non-fraud transactions are far more larger in number
+than fraud transactions, we will pass all non-fraud transactions
+through K-means cluster algorithm.
+
+K-means Data Balancing:
+
+input to K-means is Dataframe of only non-fraud transactions
+
+K-means algo requires one more field called number of cluster centroids
+
+Take take number of fraud transactions = number of cluster centroids
+
+so now K-means algo will group all non-fraud txns into these cluster centroids.
+
+As a result, non-fraud txns are reduced to number equal to fraud txns, so 
+data is balanced now.
+
+Then combine both the DFs, so this is how data is balanced using K-means algo.
+
+After data is balanced, Random forest algo is applied on this balanced data frame.
+
+Random Forest will train on this data and create a model, which is saved into filessystem.
+
+==============================
+Spark Streaming job Part 1
+==============================
+
+First customer data is read from cassandra.
+
+Using this data, we can calculate age of customer (using dob) and distance (between merchant and customer)
+
+These 2 fields are used to determine if a txn is fraud or not.
+
+We then load the pre-processing model and RF model created by Spark ML job.
+
+These 2 models are used to predict if a given txn is fraud or not.
+
+These predictions are saved to cassandra. Fraud txns to fraud table and non fraud to non fraud table
+
+We also save the kafka offsets to Kafka offset table in cassandra.
+
+job name: DstreamFraudDetection.scala in RealTimeFraudDetection package
+
+In the code, if you see, tables name fraud, non-fraud and kafka offset are
+sent from driver to executors.
+Bcoz predictions are inserted into cassandra by spark executors, we pass 
+them as broadcastMap.
+
+Kafka consumer is also initialized in this class.
+first it reads the offset from kafka offset table in cassandra
+and then it starts reading msgs from that topic.
+
+there are 2 cases. None and Some.
+When the streaming job is started for the first time, there will be
+no offset in cassandra table, in tht case, it will go to None case.
+
+==============================
+Spark Streaming job Part 2
+==============================
+
+While consuming each msg from kafka topic, each msg is converted into
+3 fields viz. value(msg), partition number and offset.
+
+==============================
+Fraud alert dashboard
+==============================
+
+Spring boot application which displays fraud txns
+on a dashboard.
+
+Trigger method is called every 5 seconds,
+which triggers a select query to return fraud txns
+in the last 5 seconds.
+
+index.html(jquery) contains the code for dashboard.
+
+it uses STOMP protocol, sockets,etc.
+
+==================================
+How to run the project
+==================================
+
+mkdir workspace
+
+cd workspace
+
+#FraudDetection
+git clone https://github.com/pramoddatamantra/FraudDetection
+
+
+#Creditcard Producer
+git clone https://github.com/pramoddatamantra/CreditcardProducer
+
+
+#Fraud Alert Dashboard
+git clone https://github.com/pramoddatamantra/Fraud-alert-dashboard
+
+#Start cassandra server
+cassandra -f
+
+#go to cassandra cmd prompt
+cqlsh
+
+#Create cassandra tables from file 
+#FraudDetection\src\main\resources\cassandra\creditcard.cql
+
+#Run Fraud-alert-dashboard
+Run as spring boot application class FraudAlertDashboard.java
+in package 
+src\main\java\com.datamantra.fraudalertdashboard\FraudAlertDashbaord.java
+
+#get the ip of oracle virtual box using unix command
+ifconfig
+
+#Then access below command in browser in ur local machine
+http://192.168.0.102:8080/
+
+#Start zookeeper server which comes bundled with confluent kafka
+cd /usr/local/kafka
+zookeeper-server-start etc/kafka/zookeeper.properties
+
+#Start Kafka Server
+  cd /usr/local/kafka
+  kafka-server-start etc/kafka/server.properties
+
+#Create topic
+  kafka-topics --zookeeper localhost:2181 --create --topic creditcardTransaction  --replication-factor 1 --partitions 3 
+  
+**********************************************************************************
+Run the Project from Intellij
+**********************************************************************************
+  
+  
+  
+#Run the Spark Job to Import existing data into Cassandra.
+ Open FraudDetection project from Intellij and run IntialImportToCassandra.scala  
+ 
+#Run Spark Machine Learning Job on the existing data
+ Open FraudDetection project from Intellij and run FraudDetectionTraining.scala
+ 
+ Note: The preprocessing model will be saved in src/main/resources/spark/training/
+ 
+ 2 folders are created:
+ - Preprocessing
+ - RandomForestModel
+ 
+#Run Spark Streaming Job for Realtime Fraud Detection
+  Open FraudDetection project and run DstreamFraudDetection.scala
+
+Note: This job will load the Preprocessing model created in above job
+      and start consuming txns using kafka and save predictions to cassandra.  
+ 
+#Start Kafka Producer
+  Open CreditcardProducer Project and run TrasactionProducer.scala
+    Input to this Program is "src/main/resources/application-local.conf"
+	
+kafka {
+
+  bootstrap.servers = "localhost:9092"
+  key.serializer = "org.apache.kafka.common.serialization.StringSerializer"
+  value.serializer = "org.apache.kafka.common.serialization.StringSerializer"
+  acks = "all"
+  retries = "3"
+  topic = "creditcardTransaction"
+  producer.file = "src/main/resources/transactions.csv"
+}
+
+kafka_offset table has entries for 3 partitions
+
+select * from kafka_offset;
+
+partition | offset
+1         |  37
+0         |  37
+2         |  37
+
+
+
+***********************************************************************************	
+#Cleanup	
+***********************************************************************************
+
+#Stop Kafka Producer
+
+#Stop Dashboard Webserver
+
+#Stop Spark Streaming Job
+
+#Stop Kafka server. Always stop Kafka Server first and wait for few seconds for the kafka server to shutdown
+  kafka-server-stop
+
+#Stop zookeeper server
+ zookeeper-server-stop
+ 
+#Clearing Kafka and Zookeeper data. First stop both the servers
+ rm -rf /tmp/kafka-logs
+ rm -rf /tmp/zookeeper
+ 
+
+#Clear Cassandra table contents.
+ TRUNCATE  customer ;
+ TRUNCATE fraud_transaction ;
+ TRUNCATE non_fraud_transaction ;
+ TRUNCATE kafka_offset ;
+ 
+#Stop Cassandra by pressing CRTL-C in the respective terminal  
+
+
+#Remove Model
+rm -rf ~/workspace/FraudDetection/blob/master/src/main/resources/spark/training
+
+===============================
+AIRFLOW
+===============================
+
+#Configure Airflow with Mysql
+
+#Create new user and database in Mysql
+   1)Login to Mysql with root credentials
+      mysql -uroot -proot
+	  
+   2) CREATE USER 'hduser'@'localhost' IDENTIFIED BY 'hadoop123';
+      GRANT ALL PRIVILEGES ON * . * TO 'hduser'@'localhost';
+      FLUSH PRIVILEGES;
+      EXIT;
+   
+   3) Login as hduser
+      mysql -uhduser -phadoop123
+
+   4) CREATE DATABASE airflow;
+      EXIT;
+
+
+# Change airflow.cfg file to use Mysql database
+   cd ~/airflow
+   vi airflow.cfg
+   
+   sql_alchemy_conn = mysql://hduser:hadoop123@localhost:3306/airflow
+   load_examples = False   
+   #save and exit
+   
+
+# Rest Airflow Database
+  airflow resetdb
+
+
+# Start Airflow Webserver
+  airflow webserver --port 8090
+
+# Start Airflow Scheduler
+  airflow scheduler
+
+#Stop Webserver and scheduler by pressing CRTL-C in the respective terminal 
+
+**********************************************************************************
+Airflow Automation on Spark Standalone Cluster
+**********************************************************************************
+1. Build all Projects
+   cd ~/workspace/FraudDetection
+   ./deployInLocal.sh   
+   
+   cd ~/workspace/CreditcardProducer
+   mvn package
+   
+   cd ~/workspace/Fraud-alert-dashboard
+   mvn package
+
+2. Start all the Servers
+
+  #Start Cassandra Server
+    cassandra -f
+
+  #Start the dashboard for visualization
+    cd ~/workspace/Fraud-alert-dashboard/
+    
+    mvn exec:java -Dserver.port=8070 -Dexec.mainClass="com.datamantra.fraudalertdashboard.dashboard.FraudAlertDashboard"
+
+  #Access Dashboard Web UI
+    http://vm_ip:8070
+	
+	http://192.168.0.102:8070/
+
+  #Start Zookeeper Server
+    cd /usr/local/kafka
+    zookeeper-server-start etc/kafka/zookeeper.properties 
+
+  #Start Kafka Server
+    kafka-server-start etc/kafka/server.properties
+
+  #Create topic
+    kafka-topics --zookeeper localhost:2181 --create --topic creditcardTransaction  --replication-factor 1 --partitions 3
+
+  #Spark Cluster Setup  
+    #Start Spark Master
+      start-master.sh
+  
+    #Start Spark Slave
+      start-slave.sh spark://datamantra:7077  
+
+    #Access Spark Web UI
+      http://vm_ip:8080/  
+
+*******************************************************************************************************	  
+3. Airflow Automation
+*******************************************************************************************************  
+  
+  #Start Spark Import Job
+    cd ~/workspace/FraudDetection
+    ./manual/sparkImportToCassandraJob.sh 
+	
+  	
+  #Create Airflow DAG directory
+    mkdir ~/airflow/dags
+
+
+  #Copy frauddetection.py file from FraudDetection Project to airflow dags directory 
+    cp ~/workspace/FraudDetection/automate/airflow/frauddetection.py  ~/airflow/dags/.
+  
+  
+  #Change the start time in frauddetection.py. Airflow uses UTC timezone  
+  
+  #Compile the changes
+    python ~/airflow/dags/frauddetection.py
+  
+
+  #Reset the db so that airflow tables are created in airflow database
+    airflow resetdb
+
+  #Start Airflow Webserver
+    airflow webserver --port 8090
+
+  #Access Airflow Webserver
+    http://localhost:8090
+  
+  #Start Airflow Scheduler  
+    airflow scheduler
+
+  #Wait for Spark Streaming Job to get scheduled through Apache Airflow, then start Kafka Producer
+  #Start Producer 
+    java -cp target/creditcard-tr-producer-1.0-SNAPSHOT-jar-with-dependencies.jar com.datamantra.producer.TrasactionProducer src/main/resources/application-local.conf
+
+
+
+
+
+
+
